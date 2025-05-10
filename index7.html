@@ -1,0 +1,202 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Item Price Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .form-container, .search-container {
+            background: #fff;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            background: #fff;
+            border-radius: 8px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: #fff;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <h1>Item Price Tracker</h1>
+    
+    <div class="form-container">
+        <h2>Add Item</h2>
+        <input type="text" id="itemName" placeholder="Enter item name" required>
+        <input type="number" id="itemPrice" placeholder="Enter price" step="0.01" required>
+        <button onclick="addItem()">Add Item</button>
+    </div>
+    
+    <div class="search-container">
+        <h2>Search Item</h2>
+        <input type="text" id="searchItem" placeholder="Enter item name to search">
+        <button onclick="searchItem()">Search</button>
+    </div>
+    
+    <div id="result"></div>
+    
+    <h2>Stored Items</h2>
+    <table id="itemTable">
+        <thead>
+            <tr>
+                <th>Item Name</th>
+                <th>Price ($)</th>
+            </tr>
+        </thead>
+        <tbody id="itemTableBody"></tbody>
+    </table>
+
+    <script>
+        // Load items from localStorage on page load
+        document.addEventListener('DOMContentLoaded', loadItems);
+
+        function addItem() {
+            const name = document.getElementById('itemName').value.trim();
+            const price = parseFloat(document.getElementById('itemPrice').value);
+            
+            if (!name || isNaN(price) || price < 0) {
+                alert('Please enter a valid item name and price.');
+                return;
+            }
+
+            // Get existing items from localStorage
+            let items = JSON.parse(localStorage.getItem('items')) || [];
+            
+            // Add new item
+            items.push({ name, price });
+            
+            // Save to localStorage
+            localStorage.setItem('items', JSON.stringify(items));
+            
+            // Clear inputs
+            document.getElementById('itemName').value = '';
+            document.getElementById('itemPrice').value = '';
+            
+            // Reload table
+            loadItems();
+        }
+
+        function searchItem() {
+            const searchTerm = document.getElementById('searchItem').value.trim().toLowerCase();
+            const resultDiv = document.getElementById('result');
+            const items = JSON.parse(localStorage.getItem('items')) || [];
+            
+            if (!searchTerm) {
+                resultDiv.innerHTML = '<p>Please enter an item name to search.</p>';
+                return;
+            }
+
+            const foundItems = items.filter(item => item.name.toLowerCase().includes(searchTerm));
+            
+            if (foundItems.length > 0) {
+                let resultHTML = '<h3>Search Results:</h3><ul>';
+                foundItems.forEach(item => {
+                    resultHTML += `<li>${item.name}: $${item.price.toFixed(2)}</li>`;
+                });
+                resultHTML += '</ul>';
+                resultDiv.innerHTML = resultHTML;
+            } else {
+                resultDiv.innerHTML = '<p>No items found matching your search.</p>';
+            }
+        }
+
+        function loadItems() {
+            const items = JSON.parse(localStorage.getItem('items')) || [];
+            const tableBody = document.getElementById('itemTableBody');
+            
+            tableBody.innerHTML = '';
+            
+            items.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.name}</td>
+                    <td>$${item.price.toFixed(2)}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+    </script>
+</body>
+</html>
